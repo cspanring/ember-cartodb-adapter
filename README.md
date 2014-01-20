@@ -15,6 +15,8 @@ This is a [CartoDB][1] adapter for [Ember Data][2] 1.0 beta 5, that extends the 
         apiKey: '<CartoDB API Key>'
     });
 
+View a [simple example][4].
+
 
 ## Issues
 
@@ -27,3 +29,4 @@ This is a [CartoDB][1] adapter for [Ember Data][2] 1.0 beta 5, that extends the 
 [1]: http://cartodb.com/
 [2]: http://github.com/emberjs/data
 [3]: http://raw.github.com/cspanring/ember-cartodb-adapter/master/ember-cartodb-adapter.js
+[4]: http://cspanring.github.io/ember-cartodb-adapter/
