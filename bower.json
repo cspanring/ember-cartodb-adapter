@@ -1,6 +1,6 @@
 {
     "name": "Ember CartoDB Adapter",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "main": "ember-cartodb-adapter.js",
     "ignore": [
         ".jshintrc",
@@ -8,5 +8,12 @@
     ],
     "dependencies": {
         "ember-data": "~1.0.0-beta.5"
-    }
+    },
+    "keywords": [
+        "ember",
+        "emberjs",
+        "cartodb"
+    ],
+    "author": "Christian Spanring",
+    "license": "MIT"
 }
