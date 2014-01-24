@@ -115,6 +115,29 @@ DS.CartoDBAdapter = DS.Adapter.extend({
     });
   },
 
+  findQuery: function(store, type, query) {
+    var where, queryTpl, url;
+
+    // serializes query object as 'WHERE' condition
+    for (var column in query) {
+      if (query.hasOwnProperty(column)) {
+        if (where === undefined) where = ' WHERE ';
+        where += column + '=\'' + query[column] + '\' AND ';
+      }
+    }
+    where = where.replace(/AND\s+$/, '');
+
+    queryTpl = 'SELECT * FROM {{table}}' + where;
+    url = this.buildURL(type, queryTpl);
+
+    return $.getJSON(url + '&format=geojson').then(function(featureColl) {
+      return featureColl.features.map(function(feature) {
+        feature.id = feature.properties.cartodb_id;
+        return feature;
+      });
+    });
+  },
+
   find: function(store, type, id) {
     var queryTpl = 'SELECT * FROM {{table}} WHERE cartodb_id={{id}}',
         url = this.buildURL(type, queryTpl, id);
