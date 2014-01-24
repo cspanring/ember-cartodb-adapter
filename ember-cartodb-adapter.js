@@ -17,6 +17,13 @@ DS.CartoDBAdapter = DS.Adapter.extend({
 
 
   /**
+   * Prefix for CartoDB table name
+   * @type {String}
+   */
+  tablePrefix: null,
+
+
+  /**
    * Turns properties and geometry of GeoJSON object into a collection of
    * column names and values, to be used in a SQL query.
    * @param  {Object} record Ember Object containing the GeoJSON data.
@@ -68,11 +75,24 @@ DS.CartoDBAdapter = DS.Adapter.extend({
 
 
   /**
+   * Returns CartoDB table name based on type and configured table prefix.
+   * @param  {Object} type Subclass of DS.Model
+   * @return {String}      Tablename
+   */
+  buildTableName: function(type) {
+    if (this.get('tablePrefix')) {
+      return this.get('tablePrefix') + '_' + type.typeKey.pluralize();
+    }
+    return type.typeKey.pluralize();
+  },
+
+
+  /**
    * http://emberjs.com/api/data/classes/DS.Adapter.html#method_find
    */
   findAll: function(store, type) {
     var url = this.buildURL(type),
-        table = type.typeKey.pluralize();
+        table = this.buildTableName(type);
 
     return $.getJSON(url + 'SELECT * FROM ' + table + '&format=geojson').then(function(featureColl) {
       return featureColl.features.map(function(feature) {
@@ -84,7 +104,7 @@ DS.CartoDBAdapter = DS.Adapter.extend({
 
   find: function(store, type, id) {
     var url = this.buildURL(type),
-        table = type.typeKey.pluralize();
+        table = this.buildTableName(type);
 
     return $.getJSON(url + 'SELECT * FROM ' + table + ' WHERE cartodb_id=' + id + '&format=geojson').then(function(featureColl) {
       var feature;
@@ -101,7 +121,7 @@ DS.CartoDBAdapter = DS.Adapter.extend({
    */
   createRecord: function(store, type, record) {
     var url = this.buildURL(type),
-        table = type.typeKey.pluralize(),
+        table = this.buildTableName(type),
         apiKey = this.apiKey,
         sqlColumns = this.sqlColumns(record);
 
@@ -129,7 +149,7 @@ DS.CartoDBAdapter = DS.Adapter.extend({
    */
   updateRecord: function(store, type, record) {
     var url = this.buildURL(type),
-        table = type.typeKey.pluralize(),
+        table = this.buildTableName(type),
         apiKey = this.apiKey,
         sqlColumns = this.sqlColumns(record);
 
@@ -156,7 +176,7 @@ DS.CartoDBAdapter = DS.Adapter.extend({
    */
   deleteRecord: function(store, type, record) {
     var url = this.buildURL(type),
-        table = type.typeKey.pluralize(),
+        table = this.buildTableName(type),
         apiKey = this.apiKey;
 
     if (!apiKey) throw 'Error: You tried to delete a record but don\'t have a CartoDB API key specified.';

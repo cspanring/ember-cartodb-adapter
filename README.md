@@ -11,6 +11,7 @@ This is a [CartoDB][1] adapter for [Ember Data][2] 1.0 beta 5, that extends the 
 
     App.ApplicationAdapter = DS.CartoDBAdapter.extend({
         accountName: '<CartDB Account Name>',
+        tablePrefix: '<Tableprefix>',
         // DANGERZONE: GIVES WRITE ACCESS TO YOUR CARTODB ACCOUNT. DON'T USE IT ON PUBLIC SITES!
         apiKey: '<CartoDB API Key>'
     });
