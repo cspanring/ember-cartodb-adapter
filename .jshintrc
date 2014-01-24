@@ -1,7 +1,9 @@
 {
   "predef": [
+    "Ember",
     "DS",
-    "$"
+    "$",
+    "App"
   ],
   "node" : false,
   "browser" : false,
