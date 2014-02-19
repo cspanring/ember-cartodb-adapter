@@ -37,6 +37,9 @@ DS.CartoDBAdapter = DS.Adapter.extend({
     for (var property in record.get('properties')) {
       if (!cartoDbSystemColumns.contains(property)) {
         value = record.get('properties.' + property);
+        // prepare value for SQL statement
+        value = (value === null) ? '' : value;
+        value = (typeof value === 'string') ? '\'' + value + '\'' : value;
         columns.push({
           name: property,
           value: (typeof value === 'string') ? '\'' + value + '\'' : value
@@ -225,7 +228,7 @@ DS.CartoDBAdapter = DS.Adapter.extend({
 
     return $.getJSON(url).then(function(result) {
       if (result.total_rows === 1) {
-        return adapter.serializeResultRow(result.rows[0])
+        return adapter.serializeResultRow(result.rows[0]);
       }
       throw new Error('Error: Could not delete the record.');
     });
