@@ -26,15 +26,15 @@
 
 <script type="text/x-handlebars" id="playground">
   <h2>{{properties.name}} {{id}}</h2>
-  <button {{action create}}>Create</button>
-  <button {{action update}}>Update</button>
-  <button {{action delete}}>Delete</button>
-  <button {{action destroy}}>Destroy</button>
+  <button {{action "create"}}>Create</button>
+  <button {{action "update"}}>Update</button>
+  <button {{action "delete"}}>Delete</button>
+  <button {{action "destroy"}}>Destroy</button>
 </script>
 
 <script src="vendor/jquery-1.10.2.js"></script>
 <script src="vendor/handlebars-1.1.2.js"></script>
-<script src="vendor/ember-1.3.1.js"></script>
+<script src="vendor/ember-1.4.0.js"></script>
 <script src="vendor/ember-data.js"></script>
 <script src="../ember-cartodb-adapter.js"></script>
 <script src="app.js"></script>
