@@ -66,6 +66,30 @@ DS.CartoDBAdapter = DS.Adapter.extend({
 
 
   /**
+   * Serializes a CartoDB response object as GeoJSON feature
+   * @param  {Object} row Result row
+   * @return {Object}     GeoJSON feature
+   */
+  serializeResultRow: function(row) {
+    var properties = {},
+        skipAttr = ['the_geom', 'the_geom_webmercator', 'geometry'];
+
+    for(var key in row) {
+      if(row.hasOwnProperty(key)){
+        if (!skipAttr.contains(key)) {
+          properties[key] = row[key];
+        }
+      }
+    }
+    return {
+      id: row.cartodb_id || null,
+      properties: properties,
+      geometry: JSON.parse(row.geometry) || null
+    };
+  },
+
+
+  /**
    * Returns CartoDB SQL API endpoint.
    * @param  {Object} type  Subclass of DS.Model
    * @param  {String} query SQL query statement
@@ -158,26 +182,16 @@ DS.CartoDBAdapter = DS.Adapter.extend({
   createRecord: function(store, type, record) {
     var adapter = this,
         sqlColumns = this.sqlColumns(record),
-        queryTpl = 'INSERT INTO {{table}} (' + sqlColumns.names + ') VALUES (' + sqlColumns.values + ')',
+        queryTpl = 'INSERT INTO {{table}} (' + sqlColumns.names + ') VALUES (' + sqlColumns.values + ') RETURNING ST_AsGeoJSON(the_geom) as geometry, *',
         url = this.buildURL(type, queryTpl);
 
     if (!this.apiKey) throw new Error('You tried to create a record but don\'t have a CartoDB API key specified.');
 
     return $.getJSON(url).then(function(result) {
-      // CartoDB only returns meta data
       if (result.total_rows === 1) {
-        // Get the last inserted record and cross fingers that it is the same object
-        var queryTpl = 'SELECT * FROM {{table}} ORDER BY created_at DESC LIMIT 1',
-            url = adapter.buildURL(type, queryTpl);
-        return $.getJSON(url + '&format=geojson').then(function(featureColl) {
-          var feature;
-          if (featureColl.features.length === 1) {
-            feature = featureColl.features[0];
-            feature.id = feature.properties.cartodb_id;
-            return feature;
-          }
-        });
+        return adapter.serializeResultRow(result.rows[0]);
       }
+      throw new Error('Error: Could not create the record.');
     });
   },
 
@@ -188,25 +202,16 @@ DS.CartoDBAdapter = DS.Adapter.extend({
   updateRecord: function(store, type, record) {
     var adapter = this,
         sqlColumns = this.sqlColumns(record),
-        queryTpl = 'UPDATE {{table}} SET (' + sqlColumns.names +') = (' + sqlColumns.values + ') WHERE cartodb_id={{id}}',
+        queryTpl = 'UPDATE {{table}} SET (' + sqlColumns.names +') = (' + sqlColumns.values + ') WHERE cartodb_id={{id}} RETURNING ST_AsGeoJSON(the_geom) as geometry, *',
         url = this.buildURL(type, queryTpl, record.get('id'));
-
+        
     if (!this.apiKey) throw new Error('Error: You tried to update a record but don\'t have a CartoDB API key specified.');
 
     return $.getJSON(url).then(function(result) {
-      // CartoDB only returns meta data
       if (result.total_rows === 1) {
-        var queryTpl = 'SELECT * FROM {{table}} WHERE cartodb_id={{id}}',
-            url = adapter.buildURL(type, queryTpl, record.get('id'));
-        return $.getJSON(url + '&format=geojson').then(function(featureColl) {
-          var feature;
-          if (featureColl.features.length === 1) {
-            feature = featureColl.features[0];
-            feature.id = feature.properties.cartodb_id;
-            return feature;
-          }
-        });
+        return adapter.serializeResultRow(result.rows[0]);
       }
+      throw new Error('Error: Could not update the record.');
     });
   },
 
@@ -215,16 +220,17 @@ DS.CartoDBAdapter = DS.Adapter.extend({
    * http://emberjs.com/api/data/classes/DS.Adapter.html#method_deleteRecord
    */
   deleteRecord: function(store, type, record) {
-    var queryTpl = 'DELETE FROM {{table}} WHERE cartodb_id={{id}}',
+    var adapter = this,
+        queryTpl = 'DELETE FROM {{table}} WHERE cartodb_id={{id}} RETURNING ST_AsGeoJSON(the_geom) as geometry, *',
         url = this.buildURL(type, queryTpl, record.get('id'));
 
     if (!this.apiKey) throw new Error('Error: You tried to delete a record but don\'t have a CartoDB API key specified.');
 
     return $.getJSON(url).then(function(result) {
       if (result.total_rows === 1) {
-        // faking a valid server response
-        return {id: record.get('id')};
+        return adapter.serializeResultRow(result.rows[0])
       }
+      throw new Error('Error: Could not delete the record.');
     });
   }
 
