@@ -228,7 +228,7 @@ DS.CartoDBAdapter = DS.Adapter.extend({
 
     return $.getJSON(url).then(function(result) {
       if (result.total_rows === 1) {
-        return adapter.serializeResultRow(result.rows[0])
+        return adapter.serializeResultRow(result.rows[0]);
       }
       throw new Error('Error: Could not delete the record.');
     });
