@@ -17,7 +17,7 @@ DS.CartoDBAdapter = DS.Adapter.extend({
 
 
   /**
-   * Prefix for CartoDB table name
+   * Optional prefix for CartoDB table name
    * @type {String}
    */
   tablePrefix: null,
@@ -34,9 +34,7 @@ DS.CartoDBAdapter = DS.Adapter.extend({
         cartoDbSystemColumns = ['cartodb_id','created_at','updated_at'],
         value;
 
-    // add property (attribute) columns
     for (var property in record.get('properties')) {
-      // skipping CartoDB system columns
       if (!cartoDbSystemColumns.contains(property)) {
         value = record.get('properties.' + property);
         columns.push({
@@ -47,7 +45,6 @@ DS.CartoDBAdapter = DS.Adapter.extend({
     }
 
     if (record.get('geometry')) {
-      // add geometry column
       columns.push({
         name: 'the_geom',
         value: 'ST_SetSRID(ST_Point(' + record.get('geometry.coordinates.0') + ', ' + record.get('geometry.coordinates.1') + '),4326)'

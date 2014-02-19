@@ -18,14 +18,14 @@
 <script type="text/x-handlebars" data-template-name="playgrounds">
   <ul class="playgrounds">
     {{#each model}}
-    <li>{{#link-to 'playground' this}}{{properties.name}}{{/link-to}}</li>
+    <li>{{#link-to 'playground' this}}{{properties.name}} {{id}}{{/link-to}}</li>
     {{/each}}
   </ul>
   {{outlet}}
 </script>
 
 <script type="text/x-handlebars" id="playground">
-  <h2>{{properties.name}}</h2>
+  <h2>{{properties.name}} {{id}}</h2>
   <button {{action create}}>Create</button>
   <button {{action update}}>Update</button>
   <button {{action delete}}>Delete</button>
@@ -39,9 +39,11 @@
 <script src="../ember-cartodb-adapter.js"></script>
 <script src="app.js"></script>
 
+<!--
 <div id="qunit"></div>
 <div id="qunit-fixture"></div>
 <script src="vendor/qunit-1.13.0.js"></script>
 <script src="tests.js"></script>
+-->
 </body>
 </html>
