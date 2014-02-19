@@ -1,6 +1,6 @@
 # Ember CartoDB Adapter
 
-This is a [CartoDB][1] adapter for [Ember Data][2] 1.0 beta 5, that extends the built-in default data adapter. Please note that Ember Data and this CartoDB adapter are both works in progress, use with caution.
+This is a [CartoDB][1] adapter for [Ember Data][2] 1.0 beta 6, that extends the built-in default data adapter. Please note that Ember Data and this CartoDB adapter are both works in progress, use with caution.
 
 ## Download
 
