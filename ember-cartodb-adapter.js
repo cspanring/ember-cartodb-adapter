@@ -37,6 +37,9 @@ DS.CartoDBAdapter = DS.Adapter.extend({
     for (var property in record.get('properties')) {
       if (!cartoDbSystemColumns.contains(property)) {
         value = record.get('properties.' + property);
+        // prepare value for SQL statement
+        value = (value === null) ? '' : value;
+        value = (typeof value === 'string') ? '\'' + value + '\'' : value;
         columns.push({
           name: property,
           value: (typeof value === 'string') ? '\'' + value + '\'' : value
