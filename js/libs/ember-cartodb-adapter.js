@@ -17,6 +17,13 @@ DS.CartoDBAdapter = DS.Adapter.extend({
 
 
   /**
+   * Optional prefix for CartoDB table name
+   * @type {String}
+   */
+  tablePrefix: null,
+
+
+  /**
    * Turns properties and geometry of GeoJSON object into a collection of
    * column names and values, to be used in a SQL query.
    * @param  {Object} record Ember Object containing the GeoJSON data.
@@ -27,9 +34,7 @@ DS.CartoDBAdapter = DS.Adapter.extend({
         cartoDbSystemColumns = ['cartodb_id','created_at','updated_at'],
         value;
 
-    // add property (attribute) columns
     for (var property in record.get('properties')) {
-      // skipping CartoDB system columns
       if (!cartoDbSystemColumns.contains(property)) {
         value = record.get('properties.' + property);
         columns.push({
@@ -39,11 +44,12 @@ DS.CartoDBAdapter = DS.Adapter.extend({
       }
     }
 
-    // add geometry column
-    columns.push({
-      name: 'the_geom',
-      value: 'ST_SetSRID(ST_Point(' + record.get('geometry.coordinates.0') + ', ' + record.get('geometry.coordinates.1') + '),4326)'
-    });
+    if (record.get('geometry')) {
+      columns.push({
+        name: 'the_geom',
+        value: 'ST_SetSRID(ST_Point(' + record.get('geometry.coordinates.0') + ', ' + record.get('geometry.coordinates.1') + '),4326)'
+      });
+    }
 
     return {
       names: columns.map(function(column) {
@@ -57,13 +63,61 @@ DS.CartoDBAdapter = DS.Adapter.extend({
 
 
   /**
-   * Returns CartoDB SQL API endpoint for provided CartoDB account.
-   * @return {String} CartoDB SQL API endpoint
+   * Serializes a CartoDB response object as GeoJSON feature
+   * @param  {Object} row Result row
+   * @return {Object}     GeoJSON feature
    */
-  buildURL: function() {
-    if (this.accountName) {
-      return 'http://' + this.accountName + '.cartodb.com/api/v2/sql?q=';
+  serializeResultRow: function(row) {
+    var properties = {},
+        skipAttr = ['the_geom', 'the_geom_webmercator', 'geometry'];
+
+    for(var key in row) {
+      if(row.hasOwnProperty(key)){
+        if (!skipAttr.contains(key)) {
+          properties[key] = row[key];
+        }
+      }
     }
+    return {
+      id: row.cartodb_id || null,
+      properties: properties,
+      geometry: JSON.parse(row.geometry) || null
+    };
+  },
+
+
+  /**
+   * Returns CartoDB SQL API endpoint.
+   * @param  {Object} type  Subclass of DS.Model
+   * @param  {String} query SQL query statement
+   * @param  {String} id    Model ID
+   * @return {String}       CartoDB SQL API endpoint
+   */
+  buildURL: function(type, queryTpl, id) {
+    var url, query,
+        table = this.buildTableName(type);
+
+    if (!this.accountName) throw new Error('Error: No CartoDB Account is specified.');
+
+    query = queryTpl.replace(/{{table}}/g, table);
+    if (id) query = query.replace(/{{id}}/g, id);
+
+    url = 'http://' + this.accountName + '.cartodb.com/api/v2/sql?q=' + query;
+    if (this.apiKey) url += '&api_key=' + this.apiKey;
+    return url;
+  },
+
+
+  /**
+   * Returns CartoDB table name based on type and configured table prefix.
+   * @param  {Object} type Subclass of DS.Model
+   * @return {String}      Tablename
+   */
+  buildTableName: function(type) {
+    if (this.get('tablePrefix')) {
+      return this.get('tablePrefix') + '_' + type.typeKey.pluralize();
+    }
+    return type.typeKey.pluralize();
   },
 
 
@@ -71,10 +125,33 @@ DS.CartoDBAdapter = DS.Adapter.extend({
    * http://emberjs.com/api/data/classes/DS.Adapter.html#method_find
    */
   findAll: function(store, type) {
-    var url = this.buildURL(type),
-        table = type.typeKey.pluralize();
+    var queryTpl = 'SELECT * FROM {{table}}',
+        url = this.buildURL(type, queryTpl);
 
-    return $.getJSON(url + 'SELECT * FROM ' + table + '&format=geojson').then(function(featureColl) {
+    return $.getJSON(url + '&format=geojson').then(function(featureColl) {
+      return featureColl.features.map(function(feature) {
+        feature.id = feature.properties.cartodb_id;
+        return feature;
+      });
+    });
+  },
+
+  findQuery: function(store, type, query) {
+    var where, queryTpl, url;
+
+    // serializes query object as 'WHERE' condition
+    for (var column in query) {
+      if (query.hasOwnProperty(column)) {
+        if (where === undefined) where = ' WHERE ';
+        where += column + '=\'' + query[column] + '\' AND ';
+      }
+    }
+    where = where.replace(/AND\s+$/, '');
+
+    queryTpl = 'SELECT * FROM {{table}}' + where;
+    url = this.buildURL(type, queryTpl);
+
+    return $.getJSON(url + '&format=geojson').then(function(featureColl) {
       return featureColl.features.map(function(feature) {
         feature.id = feature.properties.cartodb_id;
         return feature;
@@ -83,10 +160,10 @@ DS.CartoDBAdapter = DS.Adapter.extend({
   },
 
   find: function(store, type, id) {
-    var url = this.buildURL(type),
-        table = type.typeKey.pluralize();
+    var queryTpl = 'SELECT * FROM {{table}} WHERE cartodb_id={{id}}',
+        url = this.buildURL(type, queryTpl, id);
 
-    return $.getJSON(url + 'SELECT * FROM ' + table + ' WHERE cartodb_id=' + id + '&format=geojson').then(function(featureColl) {
+    return $.getJSON(url + '&format=geojson').then(function(featureColl) {
       var feature;
       if (featureColl.features.length === 0) return { id: id };
       feature = featureColl.features[0];
@@ -100,26 +177,18 @@ DS.CartoDBAdapter = DS.Adapter.extend({
    * http://emberjs.com/api/data/classes/DS.Adapter.html#method_createRecord
    */
   createRecord: function(store, type, record) {
-    var url = this.buildURL(type),
-        table = type.typeKey.pluralize(),
-        apiKey = this.apiKey,
-        sqlColumns = this.sqlColumns(record);
+    var adapter = this,
+        sqlColumns = this.sqlColumns(record),
+        queryTpl = 'INSERT INTO {{table}} (' + sqlColumns.names + ') VALUES (' + sqlColumns.values + ') RETURNING ST_AsGeoJSON(the_geom) as geometry, *',
+        url = this.buildURL(type, queryTpl);
 
-    if (!apiKey) throw 'Error: You tried to create a record but don\'t have a CartoDB API key specified.';
+    if (!this.apiKey) throw new Error('You tried to create a record but don\'t have a CartoDB API key specified.');
 
-    return $.getJSON(url + 'INSERT INTO ' + table + ' (' + sqlColumns.names + ') VALUES (' + sqlColumns.values + ')&api_key=' + apiKey).then(function(result) {
-      // CartoDB only returns meta data
+    return $.getJSON(url).then(function(result) {
       if (result.total_rows === 1) {
-        // Get the last inserted record and cross fingers that it is the same object
-        return $.getJSON(url + 'SELECT * FROM ' + table + ' ORDER BY created_at DESC LIMIT 1 &format=geojson').then(function(featureColl) {
-          var feature;
-          if (featureColl.features.length === 1) {
-            feature = featureColl.features[0];
-            feature.id = feature.properties.cartodb_id;
-            return feature;
-          }
-        });
+        return adapter.serializeResultRow(result.rows[0]);
       }
+      throw new Error('Error: Could not create the record.');
     });
   },
 
@@ -128,25 +197,18 @@ DS.CartoDBAdapter = DS.Adapter.extend({
    * http://emberjs.com/api/data/classes/DS.Adapter.html#method_updateRecord
    */
   updateRecord: function(store, type, record) {
-    var url = this.buildURL(type),
-        table = type.typeKey.pluralize(),
-        apiKey = this.apiKey,
-        sqlColumns = this.sqlColumns(record);
+    var adapter = this,
+        sqlColumns = this.sqlColumns(record),
+        queryTpl = 'UPDATE {{table}} SET (' + sqlColumns.names +') = (' + sqlColumns.values + ') WHERE cartodb_id={{id}} RETURNING ST_AsGeoJSON(the_geom) as geometry, *',
+        url = this.buildURL(type, queryTpl, record.get('id'));
+        
+    if (!this.apiKey) throw new Error('Error: You tried to update a record but don\'t have a CartoDB API key specified.');
 
-    if (!apiKey) throw 'Error: You tried to update a record but don\'t have a CartoDB API key specified.';
-
-    return $.getJSON(url + 'UPDATE ' + table + ' SET (' + sqlColumns.names +') = (' + sqlColumns.values + ') WHERE cartodb_id=' + record.get('id') + '&api_key=' + apiKey).then(function(result) {
-      // CartoDB only returns meta data
+    return $.getJSON(url).then(function(result) {
       if (result.total_rows === 1) {
-        return $.getJSON(url + 'SELECT * FROM ' + table + ' WHERE cartodb_id=' + record.get('id') + '&format=geojson').then(function(featureColl) {
-          var feature;
-          if (featureColl.features.length === 1) {
-            feature = featureColl.features[0];
-            feature.id = feature.properties.cartodb_id;
-            return feature;
-          }
-        });
+        return adapter.serializeResultRow(result.rows[0]);
       }
+      throw new Error('Error: Could not update the record.');
     });
   },
 
@@ -155,17 +217,17 @@ DS.CartoDBAdapter = DS.Adapter.extend({
    * http://emberjs.com/api/data/classes/DS.Adapter.html#method_deleteRecord
    */
   deleteRecord: function(store, type, record) {
-    var url = this.buildURL(type),
-        table = type.typeKey.pluralize(),
-        apiKey = this.apiKey;
+    var adapter = this,
+        queryTpl = 'DELETE FROM {{table}} WHERE cartodb_id={{id}} RETURNING ST_AsGeoJSON(the_geom) as geometry, *',
+        url = this.buildURL(type, queryTpl, record.get('id'));
 
-    if (!apiKey) throw 'Error: You tried to delete a record but don\'t have a CartoDB API key specified.';
+    if (!this.apiKey) throw new Error('Error: You tried to delete a record but don\'t have a CartoDB API key specified.');
 
-    return $.getJSON(url + 'DELETE FROM ' + table + ' WHERE cartodb_id=' + record.get('id') + '&api_key=' + apiKey).then(function(result) {
+    return $.getJSON(url).then(function(result) {
       if (result.total_rows === 1) {
-        // faking a valid server response
-        return {id: record.get('id')};
+        return adapter.serializeResultRow(result.rows[0])
       }
+      throw new Error('Error: Could not delete the record.');
     });
   }
 
