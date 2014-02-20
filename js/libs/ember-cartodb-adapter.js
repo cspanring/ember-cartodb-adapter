@@ -1,4 +1,4 @@
-DS.CartoDBAdapter = DS.Adapter.extend({
+DS.CartoDBAdapter = DS.RESTAdapter.extend({
 
   /**
    * CartoDB account name
@@ -24,7 +24,7 @@ DS.CartoDBAdapter = DS.Adapter.extend({
 
 
   /**
-   * Turns properties and geometry of GeoJSON object into a collection of
+   * Serializes properties and geometry of GeoJSON object as a collection of
    * column names and values, to be used in a SQL query.
    * @param  {Object} record Ember Object containing the GeoJSON data.
    * @return {Array}         Collection of column (property) names and values.
@@ -37,9 +37,7 @@ DS.CartoDBAdapter = DS.Adapter.extend({
     for (var property in record.get('properties')) {
       if (!cartoDbSystemColumns.contains(property)) {
         value = record.get('properties.' + property);
-        // prepare value for SQL statement
         value = (value === null) ? '' : value;
-        value = (typeof value === 'string') ? '\'' + value + '\'' : value;
         columns.push({
           name: property,
           value: (typeof value === 'string') ? '\'' + value + '\'' : value
@@ -129,18 +127,21 @@ DS.CartoDBAdapter = DS.Adapter.extend({
    */
   findAll: function(store, type) {
     var queryTpl = 'SELECT * FROM {{table}}',
-        url = this.buildURL(type, queryTpl);
+        url = this.buildURL(type, queryTpl),
+        response = {};
 
-    return $.getJSON(url + '&format=geojson').then(function(featureColl) {
-      return featureColl.features.map(function(feature) {
+    return this.ajax(url + '&format=geojson', 'GET').then(function(featureColl) {
+      response[type.typeKey.pluralize()] = featureColl.features.map(function(feature) {
         feature.id = feature.properties.cartodb_id;
         return feature;
       });
+      return response;
     });
   },
 
   findQuery: function(store, type, query) {
-    var where, queryTpl, url;
+    var where, queryTpl, url,
+        response = {};
 
     // serializes query object as 'WHERE' condition
     for (var column in query) {
@@ -154,24 +155,27 @@ DS.CartoDBAdapter = DS.Adapter.extend({
     queryTpl = 'SELECT * FROM {{table}}' + where;
     url = this.buildURL(type, queryTpl);
 
-    return $.getJSON(url + '&format=geojson').then(function(featureColl) {
-      return featureColl.features.map(function(feature) {
+    return this.ajax(url + '&format=geojson', 'GET').then(function(featureColl) {
+      response[type.typeKey.pluralize()] = featureColl.features.map(function(feature) {
         feature.id = feature.properties.cartodb_id;
         return feature;
       });
+      return response;
     });
   },
 
   find: function(store, type, id) {
     var queryTpl = 'SELECT * FROM {{table}} WHERE cartodb_id={{id}}',
-        url = this.buildURL(type, queryTpl, id);
+        url = this.buildURL(type, queryTpl, id),
+        response = {};
 
-    return $.getJSON(url + '&format=geojson').then(function(featureColl) {
+    return this.ajax(url + '&format=geojson', 'GET').then(function(featureColl) {
       var feature;
-      if (featureColl.features.length === 0) return { id: id };
+      if (featureColl.features.length === 0) throw new Error('No record found.');
       feature = featureColl.features[0];
       feature.id = feature.properties.cartodb_id;
-      return feature;
+      response[type.typeKey] = feature;
+      return response;
     });
   },
 
@@ -183,13 +187,15 @@ DS.CartoDBAdapter = DS.Adapter.extend({
     var adapter = this,
         sqlColumns = this.sqlColumns(record),
         queryTpl = 'INSERT INTO {{table}} (' + sqlColumns.names + ') VALUES (' + sqlColumns.values + ') RETURNING ST_AsGeoJSON(the_geom) as geometry, *',
-        url = this.buildURL(type, queryTpl);
+        url = this.buildURL(type, queryTpl),
+        response= {};
 
     if (!this.apiKey) throw new Error('You tried to create a record but don\'t have a CartoDB API key specified.');
 
-    return $.getJSON(url).then(function(result) {
+    return this.ajax(url, 'GET').then(function(result) {
       if (result.total_rows === 1) {
-        return adapter.serializeResultRow(result.rows[0]);
+        response[type.typeKey] = adapter.serializeResultRow(result.rows[0]);
+        return response;
       }
       throw new Error('Error: Could not create the record.');
     });
@@ -203,13 +209,15 @@ DS.CartoDBAdapter = DS.Adapter.extend({
     var adapter = this,
         sqlColumns = this.sqlColumns(record),
         queryTpl = 'UPDATE {{table}} SET (' + sqlColumns.names +') = (' + sqlColumns.values + ') WHERE cartodb_id={{id}} RETURNING ST_AsGeoJSON(the_geom) as geometry, *',
-        url = this.buildURL(type, queryTpl, record.get('id'));
+        url = this.buildURL(type, queryTpl, record.get('id')),
+        response = {};
         
     if (!this.apiKey) throw new Error('Error: You tried to update a record but don\'t have a CartoDB API key specified.');
 
-    return $.getJSON(url).then(function(result) {
+    return this.ajax(url, 'GET').then(function(result) {
       if (result.total_rows === 1) {
-        return adapter.serializeResultRow(result.rows[0]);
+        response[type.typeKey] = adapter.serializeResultRow(result.rows[0]);
+        return response;
       }
       throw new Error('Error: Could not update the record.');
     });
@@ -222,13 +230,15 @@ DS.CartoDBAdapter = DS.Adapter.extend({
   deleteRecord: function(store, type, record) {
     var adapter = this,
         queryTpl = 'DELETE FROM {{table}} WHERE cartodb_id={{id}} RETURNING ST_AsGeoJSON(the_geom) as geometry, *',
-        url = this.buildURL(type, queryTpl, record.get('id'));
+        url = this.buildURL(type, queryTpl, record.get('id')),
+        response = {};
 
     if (!this.apiKey) throw new Error('Error: You tried to delete a record but don\'t have a CartoDB API key specified.');
 
-    return $.getJSON(url).then(function(result) {
+    return this.ajax(url, 'GET').then(function(result) {
       if (result.total_rows === 1) {
-        return adapter.serializeResultRow(result.rows[0]);
+        response[type.typeKey] = adapter.serializeResultRow(result.rows[0]);
+        return response;
       }
       throw new Error('Error: Could not delete the record.');
     });
