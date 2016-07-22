@@ -103,7 +103,7 @@ DS.CartoDBAdapter = DS.RESTAdapter.extend({
     query = queryTpl.replace(/{{table}}/g, table);
     if (id) query = query.replace(/{{id}}/g, id);
 
-    url = 'http://' + this.accountName + '.cartodb.com/api/v2/sql?q=' + query;
+    url = '//' + this.accountName + '.cartodb.com/api/v2/sql?q=' + query;
     if (this.apiKey) url += '&api_key=' + this.apiKey;
     return url;
   },
